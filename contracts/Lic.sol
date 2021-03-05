@@ -26,7 +26,7 @@ contract Lic is Context, Ownable, BaseERC20 {
 
     uint256 public constant MAX_SUPPLY = 50000000e18;
 
-    uint256 public constant AIRDROP = 6000000e18; //10%
+    uint256 public constant AIRDROP = 6000000e18; //12%
     uint256 public constant LIQUIDITY = 2500000e18;
     uint256 public constant TEAM = 3000000e18;
     uint256 public constant MARKETING = 7500000e18;
@@ -53,7 +53,20 @@ contract Lic is Context, Ownable, BaseERC20 {
     }
 
     function initialSetup(address _dev) internal {
-        //setup token lock...
+        initTime = block.timestamp;
+        tokenRecipient = _dev;
+
+        uint256 totalUnlocked = 0;
+        airdropUnlocked = AIRDROP.mul(20).div(100);
+
+        totalUnlocked = totalUnlocked.add(airdropUnlocked);
+        totalUnlocked = totalUnlocked.add(LIQUIDITY);
+        totalUnlocked = totalUnlocked.add(MARKETING);
+
+        whitelist[address(this)] = true;
+        whitelist[tokenRecipient] = true;
+        _mint(address(this), MAX_SUPPLY);
+        _transfer(address(this), tokenRecipient, totalUnlocked);
     }
 
     function releasableAirdrop() public view returns (uint256) {
@@ -220,7 +233,7 @@ contract Lic is Context, Ownable, BaseERC20 {
 
         uint256 fee = 0;
         uint256 recipientAmount = amount;
-        if (txFeePerThousand > 0 && masterchef != address(0)) {
+        if (!whitelist[sender] && !whitelist[recipient] && txFeePerThousand > 0 && masterchef != address(0)) {
             fee = amount.mul(txFeePerThousand).div(1000);
             recipientAmount = amount.sub(fee);
         }
