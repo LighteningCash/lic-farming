@@ -252,7 +252,7 @@ contract MasterChef is Ownable {
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accLicPerShare).div(1e12).sub(user.rewardDebt);
             lockRewardAndTransfer(msg.sender, pending);
-            transferForReferrals(_pid, pending);
+            transferForReferrals(_pid, msg.sender, pending);
         }
         pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
         user.amount = user.amount.add(_amount);
@@ -264,7 +264,26 @@ contract MasterChef is Ownable {
         emit Deposit(msg.sender, _pid, _amount);
     }
 
-    function transferForReferrals(uint256 _pid, uint256 _mainPending) internal {
+    function depositFor(uint256 _pid, address _toWhom, uint256 _amount, address _referrer) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][_toWhom];
+        updatePool(_pid);
+        if (user.amount > 0) {
+            uint256 pending = user.amount.mul(pool.accLicPerShare).div(1e12).sub(user.rewardDebt);
+            lockRewardAndTransfer(_toWhom, pending);
+            transferForReferrals(_pid, _toWhom, pending);
+        }
+        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+        user.amount = user.amount.add(_amount);
+        user.rewardDebt = user.amount.mul(pool.accLicPerShare).div(1e12);
+
+        if (referrers[_toWhom] == address(0) && _referrer != address(0) && _referrer != _toWhom) {
+            referrers[_toWhom] = address(_referrer);
+        }
+        emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    function transferForReferrals(uint256 _pid, address _user, uint256 _mainPending) internal {
         PoolInfo storage pool = poolInfo[_pid];
         uint256 totalForRefs = _mainPending.mul(10).div(85);    //refs = 10% of total rewards, user = 85% of total rewards
         uint256 totalPercent = rewardPercentRef1.add(rewardPercentRef2);
@@ -273,7 +292,7 @@ contract MasterChef is Ownable {
         address refTokenAddress = pool.referralToken != address(0) ? pool.referralToken: address(lic);
         IERC20 refToken = IERC20(refTokenAddress);
         uint256 referralsToDev = 0;
-        address ref1Address = referrers[msg.sender];
+        address ref1Address = referrers[_user];
         address ref2Address = referrers[ref1Address];
         if (ref1Address != address(0)) {
             if (refToken.balanceOf(ref1Address) >= pool.minAmountForRef1) {
@@ -306,7 +325,7 @@ contract MasterChef is Ownable {
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accLicPerShare).div(1e12).sub(user.rewardDebt);
         lockRewardAndTransfer(msg.sender, pending);
-        transferForReferrals(_pid, pending);
+        transferForReferrals(_pid, msg.sender, pending);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accLicPerShare).div(1e12);
         pool.lpToken.safeTransfer(address(msg.sender), _amount);
