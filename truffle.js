@@ -2,9 +2,6 @@ require("dotenv").config();
 
 console.log(process.env.INFURA_APIKEY);
 
-
-
-
 module.exports = {
   networks: {
     development: {
