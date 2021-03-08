@@ -66,11 +66,17 @@ contract MasterChef is Ownable {
     // Dev address.
     address public devaddr;
     // Block number when bonus LIC period ends.
-    uint256 public bonusEndBlock;
+    uint256 public bonus1EndBlock;
+    uint256 public bonus2EndBlock;
+
     // LIC tokens created per block.
     uint256 public licPerBlock;
     // Bonus muliplier for early lic makers.
-    uint256 public constant BONUS_MULTIPLIER = 5;
+    //first 5 days: 5 LIC/s, 15LIC/block
+    //next 5 days: 3 LIC/s, 9LIC.block
+    //the rest: 1 LIC/s, 3LIC/block
+    uint256 public constant BONUS1_MULTIPLIER = 5;
+    uint256 public constant BONUS2_MULTIPLIER = 3;
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
     IMigratorChef public migrator;
 
@@ -99,16 +105,16 @@ contract MasterChef is Ownable {
         ILic _lic,
         address _devaddr,
         uint256 _licPerBlock,
-        uint256 _startBlock,
-        uint256 _bonusEndBlock
+        uint256 _startBlock
     ) public {
         lic = _lic;
         devaddr = _devaddr;
         licPerBlock = _licPerBlock;
-        bonusEndBlock = _bonusEndBlock;
-        startBlock = _startBlock;
+        startBlock = block.number > _startBlock ? block.number : _startBlock;
+        bonus1EndBlock = startBlock + 5 * 86400/3;  //5 days
+        bonus2EndBlock = bonus1EndBlock + 5 * 86400/3;  //5 days
 		startTimestamp = block.timestamp;
-        lastRewardBlock = block.number > startBlock ? block.number : startBlock;
+        lastRewardBlock = startBlock;
     }
 
     function poolLength() external view returns (uint256) {
@@ -160,13 +166,21 @@ contract MasterChef is Ownable {
 
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
-        if (_to <= bonusEndBlock) {
-            return _to.sub(_from).mul(BONUS_MULTIPLIER);
-        } else if (_from >= bonusEndBlock) {
+        if (_to <= bonus1EndBlock) {
+            return _to.sub(_from).mul(BONUS1_MULTIPLIER);
+        } else if (_to <= bonus2EndBlock) {
+            if (_from >= bonus1EndBlock) {
+                return _to.sub(_from).mul(BONUS2_MULTIPLIER);
+            } else {
+                return bonus1EndBlock.sub(_from).mul(BONUS1_MULTIPLIER).add(
+                    _to.sub(bonus1EndBlock).mul(BONUS2_MULTIPLIER)
+                );
+            }
+        } else if (_from >= bonus2EndBlock) {
             return _to.sub(_from);
         } else {
-            return bonusEndBlock.sub(_from).mul(BONUS_MULTIPLIER).add(
-                _to.sub(bonusEndBlock)
+            return bonus2EndBlock.sub(_from).mul(BONUS2_MULTIPLIER).add(
+                _to.sub(bonus2EndBlock)
             );
         }
     }
