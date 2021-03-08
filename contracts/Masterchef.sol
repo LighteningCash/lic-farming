@@ -10,9 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 
 
-interface IMigratorChef {
-    function migrate(IERC20 token) external returns (IERC20);
-}
+
 interface ILic is IERC20 {
 	function pullRewards(uint256 _amount) external returns (uint256);
 	function pullableRewards(uint256 _amount) external view returns (uint256);
@@ -40,7 +38,6 @@ contract MasterChef is Ownable {
         uint256 allocPoint;       // How many allocation points assigned to this pool. LICs to distribute per block.
         uint256 accLicPerShare; // Accumulated LICs per share, times 1e12. See below.
         uint256 totalPaidReward;
-		bool emergencyWithdrawable;
 		uint256 cumulativeRewardsSinceStart;	//deflationary rewards
         address referralToken;  //used for checking whether referrers can receive rewards
         uint256 minAmountForRef1;   //minimum referral token balance of referrer level 1
@@ -54,7 +51,7 @@ contract MasterChef is Ownable {
 
 	uint256 public constant REWARD_LOCK_PERIOD = 180 days;
 	uint256 public constant REWARD_LOCK_VESTING = 90 days;
-	uint256 public constant REWARD_LOCK_PERCENT = 75;
+	uint256 public constant REWARD_PAY_PERCENT_X10 = 235;
 
     uint256 public constant rewardPercentRef1 = 7;
     uint256 public constant rewardPercentRef2 = 3;
@@ -78,7 +75,6 @@ contract MasterChef is Ownable {
     uint256 public constant BONUS1_MULTIPLIER = 5;
     uint256 public constant BONUS2_MULTIPLIER = 3;
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
-    IMigratorChef public migrator;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -141,7 +137,6 @@ contract MasterChef is Ownable {
             lpToken: _lpToken,
             allocPoint: _allocPoint,
             accLicPerShare: 0,
-			emergencyWithdrawable: false, 
             totalPaidReward: ACC_TOTAL_REWARD,
 			cumulativeRewardsSinceStart: 0,
             referralToken:_refToken,  //used for checking whether referrers can receive rewards
@@ -159,10 +154,6 @@ contract MasterChef is Ownable {
         poolInfo[_pid].allocPoint = _allocPoint;
     }
 
-    // Set the migrator contract. Can only be called by the owner.
-    function setMigrator(IMigratorChef _migrator) public onlyOwner {
-        migrator = _migrator;
-    }
 
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
@@ -335,7 +326,6 @@ contract MasterChef is Ownable {
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
-		require(pool.emergencyWithdrawable, "!emergencyWithdrawable");
         UserInfo storage user = userInfo[_pid][msg.sender];
         pool.lpToken.safeTransfer(address(msg.sender), user.amount);
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
@@ -363,7 +353,7 @@ contract MasterChef is Ownable {
 	}
 
 	function lockRewardAndTransfer(address _to, uint256 _amount) internal {
-		uint256 shouldPay = _amount.mul(REWARD_LOCK_PERCENT).div(100);
+		uint256 shouldPay = _amount.mul(REWARD_PAY_PERCENT_X10).div(1000);
         if (startTimestamp.add(REWARD_LOCK_PERIOD) < block.timestamp) {
             //lock period pass
             shouldPay = _amount;
