@@ -47,6 +47,7 @@ contract Lic is Context, Ownable, BaseERC20 {
     uint256 public developmentUnlocked = 0;
     uint256 public ecosystemUnlocked = 0;
     uint256 public advisorUnlocked = 0;
+    uint256 public marketingUnlocked = 0;
 
     constructor(address _dev) public BaseERC20("LIGHTENING.CASH", "LIC") {
         initialSetup(_dev);
@@ -58,10 +59,11 @@ contract Lic is Context, Ownable, BaseERC20 {
 
         uint256 totalUnlocked = 0;
         airdropUnlocked = AIRDROP.mul(20).div(100);
+        marketingUnlocked = MARKETING.mul(80).div(100);
 
         totalUnlocked = totalUnlocked.add(airdropUnlocked);
         totalUnlocked = totalUnlocked.add(LIQUIDITY);
-        totalUnlocked = totalUnlocked.add(MARKETING);
+        totalUnlocked = totalUnlocked.add(marketingUnlocked);
 
         whitelist[address(this)] = true;
         whitelist[tokenRecipient] = true;
@@ -71,11 +73,10 @@ contract Lic is Context, Ownable, BaseERC20 {
 
     function releasableAirdrop() public view returns (uint256) {
         if (initTime == 0) return 0;
-        if (initTime == block.timestamp) return AIRDROP.mul(20).div(100);
         uint256 startReleasing = initTime.add(6 * 30 * 86400);
         if (startReleasing > block.timestamp) return 0;
         uint256 gap = block.timestamp.sub(startReleasing);
-        uint256 months = gap.div(30 * 86400);
+        uint256 months = gap.div(30 * 86400) + 1;
         uint256 totalReleasable = AIRDROP.mul(20).div(100) +
             months.mul(AIRDROP.mul(10).div(100));
         if (totalReleasable > AIRDROP) {
@@ -86,62 +87,64 @@ contract Lic is Context, Ownable, BaseERC20 {
 
     function releasableTeam() public view returns (uint256) {
         if (initTime == 0) return 0;
-        if (initTime == block.timestamp) return AIRDROP.mul(20).div(100);
-        uint256 startReleasing = initTime.add(6 * 30 * 86400);
+        uint256 startReleasing = initTime.add(12 * 30 * 86400);
         if (startReleasing > block.timestamp) return 0;
         uint256 gap = block.timestamp.sub(startReleasing);
-        uint256 months = gap.div(30 * 86400);
-        uint256 totalReleasable = AIRDROP.mul(20).div(100) +
-            months.mul(AIRDROP.mul(10).div(100));
-        if (totalReleasable > AIRDROP) {
-            totalReleasable = AIRDROP;
+        uint256 months = gap.div(30 * 86400) + 1;
+        uint256 totalReleasable = months.mul(TEAM.mul(10).div(100));
+        if (totalReleasable > TEAM) {
+            totalReleasable = TEAM;
         }
-        return totalReleasable.sub(airdropUnlocked);
+        return totalReleasable.sub(teamUnlocked);
     }
+
+    function releasableMarketing() public view returns (uint256) {
+        if (initTime == 0) return 0;
+        uint256 startReleasing = initTime.add(1 * 30 * 86400);
+        if (startReleasing > block.timestamp) return 0;
+        uint256 gap = block.timestamp.sub(startReleasing);
+        uint256 months = gap.div(30 * 86400) +  1;
+        uint256 totalReleasable = MARKETING.mul(80).div(100) +
+            months.mul(MARKETING.mul(35).div(1000));    //3.5%/month
+        if (totalReleasable > MARKETING) {
+            totalReleasable = MARKETING;
+        }
+        return totalReleasable.sub(marketingUnlocked);
+    }
+
 
     function releasableDevelopment() public view returns (uint256) {
         if (initTime == 0) return 0;
-        if (initTime == block.timestamp) return AIRDROP.mul(20).div(100);
         uint256 startReleasing = initTime.add(6 * 30 * 86400);
         if (startReleasing > block.timestamp) return 0;
         uint256 gap = block.timestamp.sub(startReleasing);
-        uint256 months = gap.div(30 * 86400);
-        uint256 totalReleasable = AIRDROP.mul(20).div(100) +
-            months.mul(AIRDROP.mul(10).div(100));
-        if (totalReleasable > AIRDROP) {
-            totalReleasable = AIRDROP;
+        uint256 months = gap.div(30 * 86400) + 1;
+        uint256 totalReleasable = months.mul(DEVELOPMENT.mul(10).div(100));
+        if (totalReleasable > DEVELOPMENT) {
+            totalReleasable = DEVELOPMENT;
         }
-        return totalReleasable.sub(airdropUnlocked);
+        return totalReleasable.sub(developmentUnlocked);
     }
 
     function releasableEcosystem() public view returns (uint256) {
         if (initTime == 0) return 0;
-        if (initTime == block.timestamp) return AIRDROP.mul(20).div(100);
         uint256 startReleasing = initTime.add(6 * 30 * 86400);
         if (startReleasing > block.timestamp) return 0;
-        uint256 gap = block.timestamp.sub(startReleasing);
-        uint256 months = gap.div(30 * 86400);
-        uint256 totalReleasable = AIRDROP.mul(20).div(100) +
-            months.mul(AIRDROP.mul(10).div(100));
-        if (totalReleasable > AIRDROP) {
-            totalReleasable = AIRDROP;
-        }
-        return totalReleasable.sub(airdropUnlocked);
+        uint256 totalReleasable = ECOSYSTEM;
+        return totalReleasable.sub(ecosystemUnlocked);
     }
 
     function releasableAdvisor() public view returns (uint256) {
         if (initTime == 0) return 0;
-        if (initTime == block.timestamp) return AIRDROP.mul(20).div(100);
-        uint256 startReleasing = initTime.add(6 * 30 * 86400);
+        uint256 startReleasing = initTime.add(3 * 30 * 86400);
         if (startReleasing > block.timestamp) return 0;
         uint256 gap = block.timestamp.sub(startReleasing);
-        uint256 months = gap.div(30 * 86400);
-        uint256 totalReleasable = AIRDROP.mul(20).div(100) +
-            months.mul(AIRDROP.mul(10).div(100));
-        if (totalReleasable > AIRDROP) {
-            totalReleasable = AIRDROP;
+        uint256 months = gap.div(3 * 30 * 86400) + 1;
+        uint256 totalReleasable = months.mul(ADVISOR.mul(20).div(100));
+        if (totalReleasable > ADVISOR) {
+            totalReleasable = ADVISOR;
         }
-        return totalReleasable.sub(airdropUnlocked);
+        return totalReleasable.sub(advisorUnlocked);
     }
 
     function releaseAirdrop() public {
@@ -184,6 +187,14 @@ contract Lic is Context, Ownable, BaseERC20 {
         }
     }
 
+    function releaseMarketing() public {
+        uint256 releasable = releasableMarketing();
+        if (releasable > 0) {
+            marketingUnlocked = marketingUnlocked.add(releasable);
+            _transfer(address(this), tokenRecipient, releasable);
+        }
+    }
+
     function setTokenReceiver(address _tr) public onlyOwner {
         tokenRecipient = _tr;
     }
@@ -219,8 +230,13 @@ contract Lic is Context, Ownable, BaseERC20 {
         txFeePerThousand = _fee;
     }
     mapping (address => bool) whitelist;    //reserved for token contract, masterchef, pancake pair
+    mapping (address => bool) whitelistRecipient;    //reserved for token contract, masterchef, pancake pair
     function setWhitelist(address _addr, bool _val) public onlyOwner {
         whitelist[_addr] = _val;
+    }
+
+    function setWhitelistRecipient(address _addr, bool _val) public onlyOwner {
+        whitelistRecipient[_addr] = _val;
     }
 
 	function _transfer(address sender, address recipient, uint256 amount) internal override {
@@ -233,7 +249,7 @@ contract Lic is Context, Ownable, BaseERC20 {
 
         uint256 fee = 0;
         uint256 recipientAmount = amount;
-        if (!whitelist[sender] && !whitelist[recipient] && txFeePerThousand > 0 && masterchef != address(0)) {
+        if (!whitelist[sender] && !whitelistRecipient[recipient] && txFeePerThousand > 0 && masterchef != address(0)) {
             fee = amount.mul(txFeePerThousand).div(1000);
             recipientAmount = amount.sub(fee);
         }

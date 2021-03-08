@@ -38,10 +38,13 @@ contract MasterChef is Ownable {
     struct PoolInfo {
         IERC20 lpToken;           // Address of LP token contract.
         uint256 allocPoint;       // How many allocation points assigned to this pool. LICs to distribute per block.
-        uint256 lastRewardBlock;  // Last block number that LIC distribution occurs.
         uint256 accLicPerShare; // Accumulated LICs per share, times 1e12. See below.
+        uint256 totalPaidReward;
 		bool emergencyWithdrawable;
 		uint256 cumulativeRewardsSinceStart;	//deflationary rewards
+        address referralToken;  //used for checking whether referrers can receive rewards
+        uint256 minAmountForRef1;   //minimum referral token balance of referrer level 1
+        uint256 minAmountForRef2;   //minimum referral token balance of referrer level 2
     }
 
 	struct LockedReward {
@@ -53,6 +56,11 @@ contract MasterChef is Ownable {
 	uint256 public constant REWARD_LOCK_VESTING = 90 days;
 	uint256 public constant REWARD_LOCK_PERCENT = 75;
 
+    uint256 public constant rewardPercentRef1 = 7;
+    uint256 public constant rewardPercentRef2 = 3;
+
+    uint256 public lastRewardBlock;  // Last block number that LIC distribution occurs.
+    uint256 public ACC_TOTAL_REWARD;
     // The LIC TOKEN!
     ILic public lic;
     // Dev address.
@@ -71,6 +79,9 @@ contract MasterChef is Ownable {
     // Info of each user that stakes LP tokens.
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
 	mapping(address => LockedReward) public lockedRewards;
+
+    mapping(address => address) public referrers;
+
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
     // The block number when LIC mining starts.
@@ -79,7 +90,6 @@ contract MasterChef is Ownable {
 
 	uint256 public oldLicBalance = 0;
 	uint256 public rewardsFromFees = 0;
-	uint256 public pendingDevRewards = 0;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -98,6 +108,7 @@ contract MasterChef is Ownable {
         bonusEndBlock = _bonusEndBlock;
         startBlock = _startBlock;
 		startTimestamp = block.timestamp;
+        lastRewardBlock = block.number > startBlock ? block.number : startBlock;
     }
 
     function poolLength() external view returns (uint256) {
@@ -115,19 +126,21 @@ contract MasterChef is Ownable {
 
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add(uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate) public onlyOwner {
+    function add(uint256 _allocPoint, IERC20 _lpToken, address _refToken, uint256 _minRef1, uint256 _minRef2, bool _withUpdate) public onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
-        uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         poolInfo.push(PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
-            lastRewardBlock: lastRewardBlock,
             accLicPerShare: 0,
 			emergencyWithdrawable: false, 
-			cumulativeRewardsSinceStart: 0
+            totalPaidReward: ACC_TOTAL_REWARD,
+			cumulativeRewardsSinceStart: 0,
+            referralToken:_refToken,  //used for checking whether referrers can receive rewards
+            minAmountForRef1: _minRef1,   //minimum referral token balance of referrer level 1
+            minAmountForRef2: _minRef2   //minimum referral token balance of referrer level 2
         }));
     }
 
@@ -145,18 +158,6 @@ contract MasterChef is Ownable {
         migrator = _migrator;
     }
 
-    // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
-    function migrate(uint256 _pid) public {
-        require(address(migrator) != address(0), "migrate: no migrator");
-        PoolInfo storage pool = poolInfo[_pid];
-        IERC20 lpToken = pool.lpToken;
-        uint256 bal = lpToken.balanceOf(address(this));
-        lpToken.safeApprove(address(migrator), bal);
-        IERC20 newLpToken = migrator.migrate(lpToken);
-        require(bal == newLpToken.balanceOf(address(this)), "migrate: bad");
-        pool.lpToken = newLpToken;
-    }
-
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
         if (_to <= bonusEndBlock) {
@@ -170,13 +171,12 @@ contract MasterChef is Ownable {
         }
     }
 
-	function calculateTotalRewardForPool(uint256 _pid, uint256 _from, uint256 _to) public view returns (uint256 inflation, uint256 fee) {
-		PoolInfo storage pool = poolInfo[_pid];
+	function calculateRewardForAllPools(uint256 _from, uint256 _to) public view returns (uint256 inflation, uint256 fee) {
 		uint256 multiplier = getMultiplier(_from, _to);
-        inflation = multiplier.mul(licPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-		inflation = inflation.mul(11).div(10);	//dev reward included
+        inflation = multiplier.mul(licPerBlock);
         inflation = lic.pullableRewards(inflation);
-		fee = rewardsFromFees.mul(pool.allocPoint).div(totalAllocPoint);//dev reward included
+        inflation = lic.pullableRewards(inflation);
+		fee = rewardsFromFees;//dev reward included
 	}
 
     // View function to see pending LIC on frontend.
@@ -185,9 +185,12 @@ contract MasterChef is Ownable {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accLicPerShare = pool.accLicPerShare;
         uint256 lpSupply = pool.lpToken.balanceOf(address(this));
-        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-			(uint256 inflation, uint256 fee) = calculateTotalRewardForPool(_pid, pool.lastRewardBlock, block.number);
-			uint256 licReward = (inflation.add(fee)).mul(10).div(11);
+        if (block.number >= lastRewardBlock && lpSupply != 0) {
+			(uint256 inflation, ) = calculateRewardForAllPools(lastRewardBlock, block.number);
+            uint256 totalReward = ACC_TOTAL_REWARD.add(inflation).add(rewardsFromFees);
+            uint256 notCountedReward = totalReward.sub(pool.totalPaidReward);
+            uint256 notCountedRewardForPool = notCountedReward.mul(pool.allocPoint).div(totalAllocPoint);
+            uint256 licReward = notCountedRewardForPool.mul(85).div(100);
             accLicPerShare = accLicPerShare.add(licReward.mul(1e12).div(lpSupply));
         }
         return user.amount.mul(accLicPerShare).div(1e12).sub(user.rewardDebt);
@@ -199,46 +202,86 @@ contract MasterChef is Ownable {
         for (uint256 pid = 0; pid < length; ++pid) {
             updatePool(pid);
         }
-		rewardsFromFees = 0;
-		safeLicTransfer(devaddr, pendingDevRewards);
-		pendingDevRewards = 0;
     }
 
     // Update reward variables of the given pool to be up-to-date.
-    function updatePool(uint256 _pid) internal {
+    function updatePool(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
-        if (block.number <= pool.lastRewardBlock) {
-            return;
-        }
+
         uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         if (lpSupply == 0) {
-            pool.lastRewardBlock = block.number;
             return;
         }
-		(uint256 inflation, uint256 fee) = calculateTotalRewardForPool(_pid, pool.lastRewardBlock, block.number);
-        uint256 totalReward = inflation.add(fee);
-        uint256 licReward = totalReward.mul(10).div(11);
-		uint256 devReward = totalReward.div(11);
 
-		pendingDevRewards = pendingDevRewards.add(devReward);
+        (uint256 inflation, ) = calculateRewardForAllPools(lastRewardBlock, block.number);
+        inflation = lic.pullRewards(inflation);
+        lastRewardBlock = block.number;
+        ACC_TOTAL_REWARD = ACC_TOTAL_REWARD.add(inflation).add(rewardsFromFees);
+        rewardsFromFees = 0;
+        uint256 notCountedReward = ACC_TOTAL_REWARD.sub(pool.totalPaidReward);
+        pool.totalPaidReward = ACC_TOTAL_REWARD;
+        uint256 notCountedRewardForPool = notCountedReward.mul(pool.allocPoint).div(totalAllocPoint);
 
+        uint256 licReward = notCountedRewardForPool.mul(85).div(100);
+		uint256 devReward = notCountedRewardForPool.mul(5).div(100);
+        //remaining 10% for referrals
         pool.accLicPerShare = pool.accLicPerShare.add(licReward.mul(1e12).div(lpSupply));
-        pool.lastRewardBlock = block.number;
+
+        lockRewardAndTransfer(devaddr, devReward);
     }
 
     // Deposit LP tokens to MasterChef for LIC allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
+    function deposit(uint256 _pid, uint256 _amount, address _referrer) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        massUpdatePools();
+        updatePool(_pid);
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accLicPerShare).div(1e12).sub(user.rewardDebt);
-            safeLicTransfer(msg.sender, pending);
+            lockRewardAndTransfer(msg.sender, pending);
+            transferForReferrals(_pid, pending);
         }
         pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accLicPerShare).div(1e12);
+
+        if (referrers[address(msg.sender)] == address(0) && _referrer != address(0) && _referrer != address(msg.sender)) {
+            referrers[address(msg.sender)] = address(_referrer);
+        }
         emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    function transferForReferrals(uint256 _pid, uint256 _mainPending) internal {
+        PoolInfo storage pool = poolInfo[_pid];
+        uint256 totalForRefs = _mainPending.mul(10).div(85);    //refs = 10% of total rewards, user = 85% of total rewards
+        uint256 totalPercent = rewardPercentRef1.add(rewardPercentRef2);
+        uint256 referAmountLv1 = totalForRefs.mul(rewardPercentRef1).div(totalPercent);
+        uint256 referAmountLv2 = totalForRefs.mul(rewardPercentRef2).div(totalPercent);
+        address refTokenAddress = pool.referralToken != address(0) ? pool.referralToken: address(lic);
+        IERC20 refToken = IERC20(refTokenAddress);
+        uint256 referralsToDev = 0;
+        address ref1Address = referrers[msg.sender];
+        address ref2Address = referrers[ref1Address];
+        if (ref1Address != address(0)) {
+            if (refToken.balanceOf(ref1Address) >= pool.minAmountForRef1) {
+                safeLicTransfer(ref1Address, referAmountLv1);
+            } else {
+                referralsToDev = referralsToDev.add(referAmountLv1);
+            }
+            if (ref2Address != address(0)) {
+                if (refToken.balanceOf(ref2Address) >= pool.minAmountForRef2) {
+                    safeLicTransfer(ref2Address, referAmountLv2);
+                } else {
+                    referralsToDev = referralsToDev.add(referAmountLv2);
+                }
+            } else {
+                referralsToDev = referralsToDev.add(referAmountLv2);           
+            }
+        } else {
+            referralsToDev = referAmountLv1.add(referAmountLv2);
+        }
+        if (referralsToDev > 0) {
+            lockRewardAndTransfer(devaddr, referralsToDev);
+        }
     }
 
     // Withdraw LP tokens from MasterChef.
@@ -246,9 +289,10 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
-        massUpdatePools();
+        updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accLicPerShare).div(1e12).sub(user.rewardDebt);
-        safeLicTransfer(msg.sender, pending);
+        lockRewardAndTransfer(msg.sender, pending);
+        transferForReferrals(_pid, pending);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accLicPerShare).div(1e12);
         pool.lpToken.safeTransfer(address(msg.sender), _amount);
@@ -266,6 +310,15 @@ contract MasterChef is Ownable {
         user.rewardDebt = 0;
     }
 
+    function releasableLockedReward(address _addr) public view returns (uint256) {
+        if (startTimestamp.add(REWARD_LOCK_PERIOD) >= block.timestamp) return 0;
+        uint256 timePassed = block.timestamp.sub(startTimestamp.add(REWARD_LOCK_PERIOD));
+		uint256 totalReleasable = lockedRewards[_addr].total.mul(timePassed).div(REWARD_LOCK_PERIOD);
+		totalReleasable = totalReleasable < lockedRewards[_addr].total ? totalReleasable:lockedRewards[_addr].total;
+		uint256 shouldRelease =  totalReleasable.sub(lockedRewards[_addr].released);
+        return shouldRelease;
+    }
+
 	function releaseLockedReward(address _addr) public {
 		require(startTimestamp.add(REWARD_LOCK_PERIOD) < block.timestamp, "!lock period");
 		uint256 timePassed = block.timestamp.sub(startTimestamp.add(REWARD_LOCK_PERIOD));
@@ -278,6 +331,10 @@ contract MasterChef is Ownable {
 
 	function lockRewardAndTransfer(address _to, uint256 _amount) internal {
 		uint256 shouldPay = _amount.mul(REWARD_LOCK_PERCENT).div(100);
+        if (startTimestamp.add(REWARD_LOCK_PERIOD) < block.timestamp) {
+            //lock period pass
+            shouldPay = _amount;
+        }
 		safeLicTransfer(_to, shouldPay);
 		uint256 shouldLock = _amount.sub(shouldPay);
 		lockedRewards[_to].total = lockedRewards[_to].total.add(shouldLock);
