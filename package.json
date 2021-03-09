@@ -14,6 +14,7 @@
     "@openzeppelin/test-helpers": "^0.5.6",
     "@openzeppelin/truffle-upgrades": "^1.0.2",
     "@openzeppelin/upgrades": "^2.8.0",
+    "bignumber.js": "^9.0.1",
     "dotenv": "^8.2.0",
     "solc": "^0.7.2",
     "truffle": "^5.1.41",

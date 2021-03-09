@@ -84,6 +84,10 @@ contract MasterChef is Ownable {
 
     mapping(address => address) public referrers;
 
+    //referrer => referrals
+    mapping(address => address[]) public referredList;
+    mapping(address => mapping(address => bool)) public referredCheckList;
+
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
     // The block number when LIC mining starts.
@@ -100,12 +104,11 @@ contract MasterChef is Ownable {
     constructor(
         ILic _lic,
         address _devaddr,
-        uint256 _licPerBlock,
         uint256 _startBlock
     ) public {
         lic = _lic;
         devaddr = _devaddr;
-        licPerBlock = _licPerBlock;
+        licPerBlock = 3e18;
         startBlock = block.number > _startBlock ? block.number : _startBlock;
         bonus1EndBlock = startBlock + 5 * 86400/3;  //5 days
         bonus2EndBlock = bonus1EndBlock + 5 * 86400/3;  //5 days
@@ -113,7 +116,7 @@ contract MasterChef is Ownable {
         lastRewardBlock = startBlock;
     }
 
-    function poolLength() external view returns (uint256) {
+    function poolLength() public view returns (uint256) {
         return poolInfo.length;
     }
 
@@ -185,13 +188,29 @@ contract MasterChef is Ownable {
 	}
 
     // View function to see pending LIC on frontend.
-    function pendingLic(uint256 _pid, address _user) external view returns (uint256) {
+    function pendingLic(uint256 _pid, address _user) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accLicPerShare = pool.accLicPerShare;
         uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         if (block.number >= lastRewardBlock && lpSupply != 0) {
 			(uint256 inflation, ) = calculateRewardForAllPools(lastRewardBlock, block.number);
+            uint256 totalReward = ACC_TOTAL_REWARD.add(inflation).add(rewardsFromFees);
+            uint256 notCountedReward = totalReward.sub(pool.totalPaidReward);
+            uint256 notCountedRewardForPool = notCountedReward.mul(pool.allocPoint).div(totalAllocPoint);
+            uint256 licReward = notCountedRewardForPool.mul(85).div(100);
+            accLicPerShare = accLicPerShare.add(licReward.mul(1e12).div(lpSupply));
+        }
+        return user.amount.mul(accLicPerShare).div(1e12).sub(user.rewardDebt);
+    }
+
+    function pendingLicAtNextBlock(uint256 _pid, address _user) public view returns (uint256) {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][_user];
+        uint256 accLicPerShare = pool.accLicPerShare;
+        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        if (block.number >= lastRewardBlock && lpSupply != 0) {
+			(uint256 inflation, ) = calculateRewardForAllPools(lastRewardBlock, block.number + 1);
             uint256 totalReward = ACC_TOTAL_REWARD.add(inflation).add(rewardsFromFees);
             uint256 notCountedReward = totalReward.sub(pool.totalPaidReward);
             uint256 notCountedRewardForPool = notCountedReward.mul(pool.allocPoint).div(totalAllocPoint);
@@ -251,6 +270,10 @@ contract MasterChef is Ownable {
 
         if (referrers[address(msg.sender)] == address(0) && _referrer != address(0) && _referrer != address(msg.sender)) {
             referrers[address(msg.sender)] = address(_referrer);
+            if (!referredCheckList[_referrer][msg.sender]) {
+                referredList[_referrer].push(msg.sender);
+                referredCheckList[_referrer][msg.sender] = true;
+            }
         }
         emit Deposit(msg.sender, _pid, _amount);
     }
@@ -270,6 +293,10 @@ contract MasterChef is Ownable {
 
         if (referrers[_toWhom] == address(0) && _referrer != address(0) && _referrer != _toWhom) {
             referrers[_toWhom] = address(_referrer);
+            if (!referredCheckList[_referrer][_toWhom]) {
+                referredList[_referrer].push(_toWhom);
+                referredCheckList[_referrer][_toWhom] = true;
+            }
         }
         emit Deposit(msg.sender, _pid, _amount);
     }
@@ -378,5 +405,40 @@ contract MasterChef is Ownable {
     function dev(address _devaddr) public {
         require(msg.sender == devaddr, "dev: wut?");
         devaddr = _devaddr;
+    }
+
+    function getReferredList(address _referrer) public view returns (address[] memory) {
+        return referredList[_referrer];
+    }
+
+    function getReferers(address _user) public view returns (address ref1, address ref2) {
+        ref1 = referrers[_user];
+        ref2 = referrers[ref1];
+    }
+
+    function getPendingReferralReward(address _referrer) public view returns (uint256) {
+        uint256 ret = 0;
+        uint256 totalRewardsOfLv1 = 0;
+        uint256 totalRewardsOfLv2 = 0;
+        address[] memory refsLv1 = referredList[_referrer];
+        uint256 numPool = poolLength();
+        for(uint256 i = 0; i < refsLv1.length; i++) {
+            for(uint256 j = 0; j < numPool; j++) {
+                totalRewardsOfLv1 = totalRewardsOfLv1.add(pendingLic(j, refsLv1[i]));
+            }
+        }
+
+        for(uint256 i = 0; i < refsLv1.length; i++) {
+            address[] memory refsOfRefs = referredList[refsLv1[i]];
+            for(uint256 j = 0; j < refsOfRefs.length; j++) {
+                for(uint256 k = 0; k < numPool; k++) {
+                    totalRewardsOfLv2 = totalRewardsOfLv2.add(pendingLic(k, refsOfRefs[j]));
+                }
+            }
+        }
+
+        ret = ret.add(totalRewardsOfLv1.mul(10).div(85).mul(7).div(10));
+        ret = ret.add(totalRewardsOfLv2.mul(10).div(85).mul(3).div(10));
+        return ret;
     }
 }

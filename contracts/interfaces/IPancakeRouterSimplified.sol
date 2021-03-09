@@ -1,6 +1,6 @@
 pragma solidity 0.6.12;
 pragma solidity 0.6.12;
-interface IPancakeRouter {
+interface IPancakeRouterSimplified {
 	function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,

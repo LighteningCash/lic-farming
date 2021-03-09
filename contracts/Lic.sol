@@ -204,7 +204,7 @@ contract Lic is Context, Ownable, BaseERC20 {
     }
 
     function pullRewards(uint256 _amount) public returns (uint256) {
-        require(msg.sender == masterchef, "!vault");
+        require(msg.sender == masterchef, "!masterchef");
         if (_amount >= FARMING_TOTAL) return 0;
         uint256 _transferAmount = _amount;
         if (currentPaidRewards.add(_transferAmount) > FARMING_TOTAL) {

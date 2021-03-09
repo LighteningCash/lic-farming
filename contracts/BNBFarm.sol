@@ -4,22 +4,22 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // for WETH
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "./interfaces/IMasterchefDeposit.sol";
-import "./interfaces/IPancakeRouter.sol";
-import "./interfaces/IPancakeFactory.sol";
+import "./interfaces/IPancakeRouterSimplified.sol";
+import "./interfaces/IPancakeFactorySimplified.sol";
 import "./interfaces/IWBNB.sol";
 
 contract FarmHelper is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     IMasterchefDeposit public chef;
-    IPancakeRouter public router;
-	IPancakeFactory public factory;
+    IPancakeRouterSimplified public router;
+	IPancakeFactorySimplified public factory;
 	address public wbnb;
 
     constructor (address _chef, address _router) public {
         chef = IMasterchefDeposit(_chef);
-        router = IPancakeRouter(_router);
-		factory = IPancakeFactory(router.factory());
+        router = IPancakeRouterSimplified(_router);
+		factory = IPancakeFactorySimplified(router.factory());
         wbnb = router.WETH();
     }
 
