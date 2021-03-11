@@ -9,4 +9,5 @@ const { expectRevert, time } = require('@openzeppelin/test-helpers')
 module.exports = async function(deployer, network, accounts) {
 	const lic = await Lic.deployed();
   	await deployer.deploy(Masterchef, lic.address, accounts[0], 0);
+	await lic.setFarmingMasterChef(Masterchef.deployed().address);
 }
