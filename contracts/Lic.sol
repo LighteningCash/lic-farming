@@ -239,6 +239,20 @@ contract Lic is Context, Ownable, BaseERC20 {
         whitelistRecipient[_addr] = _val;
     }
 
+    function shouldHaveFee(address sender, address recipient) public view returns (bool) {
+        return !whitelist[sender] && !whitelistRecipient[recipient] && txFeePerThousand > 0 && masterchef != address(0);
+    }
+
+    function computeTxFee(address sender, address recipient, uint256 amount) public view returns (uint256, uint256) {
+        uint256 fee = 0;
+        uint256 recipientAmount = amount;
+        if (!whitelist[sender] && !whitelistRecipient[recipient] && txFeePerThousand > 0 && masterchef != address(0)) {
+            fee = amount.mul(txFeePerThousand).div(1000);
+            recipientAmount = amount.sub(fee);
+        }
+        return (fee, recipientAmount);
+    }
+
 	function _transfer(address sender, address recipient, uint256 amount) internal override {
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
@@ -247,12 +261,8 @@ contract Lic is Context, Ownable, BaseERC20 {
 
         _balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
 
-        uint256 fee = 0;
-        uint256 recipientAmount = amount;
-        if (!whitelist[sender] && !whitelistRecipient[recipient] && txFeePerThousand > 0 && masterchef != address(0)) {
-            fee = amount.mul(txFeePerThousand).div(1000);
-            recipientAmount = amount.sub(fee);
-        }
+        (uint256 fee, uint256 recipientAmount) = computeTxFee(sender, recipient, amount);
+        
         require(fee.add(recipientAmount) == amount, "!!!! Fee calculation");
 
         _balances[recipient] = _balances[recipient].add(recipientAmount);
