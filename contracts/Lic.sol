@@ -229,8 +229,8 @@ contract Lic is Context, Ownable, BaseERC20 {
         require(_fee <= 10, "max fee is 1%");
         txFeePerThousand = _fee;
     }
-    mapping (address => bool) whitelist;    //reserved for token contract, masterchef, pancake pair
-    mapping (address => bool) whitelistRecipient;    //reserved for token contract, masterchef, pancake pair
+    mapping (address => bool) public whitelist;    //reserved for token contract, masterchef, pancake pair
+    mapping (address => bool) public whitelistRecipient;    //reserved for token contract, masterchef, pancake pair
     function setWhitelist(address _addr, bool _val) public onlyOwner {
         whitelist[_addr] = _val;
     }

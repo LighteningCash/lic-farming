@@ -17,7 +17,7 @@ module.exports = {
       provider: () => new HDWalletProvider(process.env.PRIVATE_KEY, 'https://bsc-dataseed.binance.org/'),
       network_id: 56,
       gas: 6000000,
-      gasPrice: utils.toWei('10', 'gwei'),
+      gasPrice: '10000000000',
       // confirmations: 0,
       // timeoutBlocks: 200,
       skipDryRun: true
@@ -26,7 +26,7 @@ module.exports = {
       provider: () => new HDWalletProvider(process.env.PRIVATE_KEY, 'https://data-seed-prebsc-1-s1.binance.org:8545/'),
       network_id: 97,
       gas: 6000000,
-      gasPrice: utils.toWei('80', 'gwei'),
+      gasPrice: '80000000000',
       // confirmations: 0,
       // timeoutBlocks: 200,
       skipDryRun: true

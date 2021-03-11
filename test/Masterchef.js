@@ -275,6 +275,15 @@ contract('MasterChef', (allAccounts) => {
 	it('Time Lock', async () => {
 		this.timelock = await TimeLock.new(deployer, 86400, {from: deployer});
 		await this.lic.transferOwnership(this.timelock.address, {from: deployer});
-		let callData = await this.lic.abi.encodeWithSelectorsetWhitelist(this.timelock.address, true).encode
+		let signature = 'setWhitelist(address,bool)'
+		let callData = web3.eth.abi.encodeParameters(['address','bool'], [this.lic.address, true]);
+		let currentTime = await time.latest();
+		await this.timelock.queueTransaction(this.lic.address, 0, signature, callData, new BN(currentTime).plus(86400).toFixed(0));
+
+		await time.increase(86500);
+
+		await this.timelock.executeTransaction(this.lic.address, 0, signature, callData, new BN(currentTime).plus(86400).toFixed(0));
+
+		assert.equal('true', (await this.lic.whitelist(this.lic.address)).valueOf().toString());
 	});
 })
