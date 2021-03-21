@@ -7,6 +7,10 @@ const Masterchef = artifacts.require('Masterchef');
 const MockERC20 = artifacts.require('MockERC20');
 const TimeLock = artifacts.require('TimeLock');
 
+function toWei(n) {
+	return new BN(n).multipliedBy(new BN('1e18')).toFixed(0);
+}
+
 let deployer
 let accounts
 let nullAcc = "0x0000000000000000000000000000000000000000"
@@ -93,8 +97,64 @@ contract('MasterChef', (allAccounts) => {
 		await assertHarvest(this, accounts[0], 0);
 	});
 
-	it('Token Lock', async () => {
+	it('Token unlock airdrop', async () => {
+		//total unlock at TGE = 1.2M + 2.5M + 6M = 9.7M
+		assert.equal(new BN('9700000e18').toFixed(0), (await this.lic.balanceOf(deployer)).valueOf().toString());
 
+		await time.increase(1);
+		//unlock airdrop
+		let balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		let balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(balBefore, balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
+
+		await time.increase(86400 * 30);
+		balBefore = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		await this.lic.unlockAirdrop({from: deployer});
+		balAfter = (await this.lic.balanceOf(deployer)).valueOf().toString();
+		assert.equal(new BN(balBefore).plus(toWei(1500000)).toFixed(0), balAfter);
 	});
 
 	it('Many LPs', async () => {

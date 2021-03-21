@@ -73,7 +73,7 @@ contract Lic is Context, Ownable, BaseERC20 {
 
     function releasableAirdrop() public view returns (uint256) {
         if (initTime == 0) return 0;
-        uint256 startReleasing = initTime.add(6 * 30 * 86400);
+        uint256 startReleasing = initTime.add(1 * 30 * 86400);
         if (startReleasing > block.timestamp) return 0;
         uint256 gap = block.timestamp.sub(startReleasing);
         uint256 months = gap.div(30 * 86400) + 1;
@@ -104,8 +104,9 @@ contract Lic is Context, Ownable, BaseERC20 {
         if (startReleasing > block.timestamp) return 0;
         uint256 gap = block.timestamp.sub(startReleasing);
         uint256 months = gap.div(30 * 86400) +  1;
+        uint256 vested = MARKETING.mul(20).div(100);
         uint256 totalReleasable = MARKETING.mul(80).div(100) +
-            months.mul(MARKETING.mul(35).div(1000));    //3.5%/month
+            months.mul(vested.div(6));    
         if (totalReleasable > MARKETING) {
             totalReleasable = MARKETING;
         }
