@@ -13,13 +13,17 @@ contract Airdrop is Ownable {
 
     uint256 public startBlock;
     uint256 public endBlock;
+	bool public isInitialized = false;
 
     event Claim(address token, address holder, uint256 amount);
 
-    constructor (uint256 start, uint256 end) public{
+    function initialize(uint256 start, uint256 end) public onlyOwner {
+		require(!isInitialized, "already initialize");
         startBlock = start;
         endBlock = end;
+		isInitialized = true;
     }
+
 
     function newAddress(address guy, uint256 amount) public onlyOwner {
         whitelist.push(guy);
